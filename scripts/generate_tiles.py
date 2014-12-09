@@ -2,13 +2,8 @@
 from math import pi,sin,log,exp,atan
 import os
 from Queue import Queue
-
 import threading
-
-try:
-    import mapnik2 as mapnik
-except:
-    import mapnik
+import mapnik
 
 DEG_TO_RAD = pi/180
 RAD_TO_DEG = 180/pi
@@ -102,26 +97,27 @@ class RenderThread:
         while True:
             #Fetch a tile from the queue and render it
             r = self.q.get()
-            if (r == None):
+            try:
+                if (r == None):
+                    self.q.task_done()
+                    return
+                else:
+                    (name, tile_uri, x, y, z) = r
+
+                exists= ""
+                if os.path.isfile(tile_uri):
+                    exists= "exists"
+                else:
+                    self.render_tile(tile_uri, x, y, z)
+                bytes=os.stat(tile_uri)[6]
+                empty= ''
+                if bytes == 103:
+                    empty = " Empty Tile "
+                self.printLock.acquire()
+                print name, ":", z, x, y, exists, empty
+                self.printLock.release()
+            finally:
                 self.q.task_done()
-                break
-            else:
-                (name, tile_uri, x, y, z) = r
-
-            exists= ""
-            if os.path.isfile(tile_uri):
-                exists= "exists"
-            else:
-                self.render_tile(tile_uri, x, y, z)
-            bytes=os.stat(tile_uri)[6]
-            empty= ''
-            if bytes == 103:
-                empty = " Empty Tile "
-            self.printLock.acquire()
-            print name, ":", z, x, y, exists, empty
-            self.printLock.release()
-            self.q.task_done()
-
 
 
 def render_tiles(bbox, mapfile, tile_dir, minZoom=1,maxZoom=18, name="unknown", num_threads=NUM_THREADS, tms_scheme=False):
@@ -134,6 +130,7 @@ def render_tiles(bbox, mapfile, tile_dir, minZoom=1,maxZoom=18, name="unknown", 
     for i in range(num_threads):
         renderer = RenderThread(tile_dir, mapfile, queue, printLock, maxZoom)
         render_thread = threading.Thread(target=renderer.loop)
+        render_thread.daemon = True
         render_thread.start()
         #print "Started render thread %s" % render_thread.getName()
         renderers[i] = render_thread
@@ -180,12 +177,12 @@ def render_tiles(bbox, mapfile, tile_dir, minZoom=1,maxZoom=18, name="unknown", 
                     raise SystemExit("Ctrl-c detected, exiting...")
 
     # Signal render threads to exit by sending empty request to queue
-    for i in range(num_threads):
+    for i in range(num_threads+1):
         queue.put(None)
     # wait for pending rendering jobs to complete
     queue.join()
-    for i in range(num_threads):
-        renderers[i].join()
+    printLock.acquire()
+    print 'Finished'
 
 import argparse
 
@@ -241,7 +238,7 @@ if __name__ == "__main__":
     render_tiles(
         arguments.bbox, 
         os.path.abspath(arguments.config), 
-        os.path.abspath(arguments.output), 
+        os.path.abspath(arguments.output) + '/', 
         arguments.min_zoom, 
         arguments.max_zoom,
     )
