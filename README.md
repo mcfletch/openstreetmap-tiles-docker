@@ -11,7 +11,7 @@ also provides instructions for managing the back end database, allowing you to:
 * Create the database
 * Import OSM data into the database
 * Drop the database
-* Create [pre-rendered tile-sets](blob/master/statictiles.md) for offline deployments
+* Create [pre-rendered tile-sets](statictiles.md) for offline deployments
 
 Run `docker run homme/openstreetmap-tiles` for usage instructions.
 
